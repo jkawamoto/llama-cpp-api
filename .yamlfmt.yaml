@@ -2,3 +2,4 @@ line_ending: lf
 formatter:
   type: basic
   retain_line_breaks_single: true
+  max_line_length: 100
