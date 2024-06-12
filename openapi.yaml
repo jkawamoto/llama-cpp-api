@@ -1,0 +1,715 @@
+openapi: 3.1.0
+info:
+  title: LLaMA.cpp HTTP Server
+  description: OpenAPI specification for the LLama.cpp HTTP Server.
+  version: 0.1.0
+  license:
+    name: MIT License
+    identifier: MIT
+servers:
+  - url: "http://localhost:8080"
+externalDocs:
+  url: https://github.com/ggerganov/llama.cpp/blob/master/examples/server/README.md
+paths:
+  /health:
+    get:
+      summary: Returns the current state of the server.
+      operationId: health
+      parameters:
+        - name: include_slots
+          in: query
+          allowEmptyValue: true
+          schema:
+            type: boolean
+            default: false
+          example: true
+      responses:
+        "200":
+          description: Current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "500":
+          description: Current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "503":
+          description: Current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /completion:
+    post:
+      summary: Given a prompt, it returns the predicted completion.
+      operationId: completion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              allOf:
+                - type: object
+                  properties:
+                    prompt:
+                      type: string
+                      description: |-
+                        Provide the prompt for this completion as a string.
+                        Internally, if `cache_prompt` is `true`, the prompt is compared to the previous completion
+                        and only the "unseen" suffix is evaluated.
+                        A `BOS` token is inserted at the start, if all of the following conditions are true:
+
+                        - The prompt is a string or an array with the first element given as a string
+                        - The model's `tokenizer.ggml.add_bos_token` metadata is `true`
+                        - The system prompt is empty
+                    stream:
+                      type: boolean
+                      description: >-
+                        It allows receiving each predicted token in real-time instead of waiting for the
+                        completion to finish. To enable this, set to `true`.
+                      default: false
+                - $ref: "#/components/schemas/GenerationSettings"
+              required:
+                - prompt
+            example:
+              prompt: Hello world!
+      responses:
+        "200":
+          description: Completion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompletionResult"
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /tokenize:
+    post:
+      summary: Tokenize a given text.
+      operationId: tokenize
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                  description: Set the text to tokenize.
+                add_special:
+                  type: boolean
+                  description: Boolean indicating if special tokens, i.e. BOS, should be inserted.
+                  default: false
+              required:
+                - content
+            example:
+              content: Hello world!
+      responses:
+        "200":
+          description: Tokens
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tokens"
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /detokenize:
+    post:
+      summary: Convert tokens to text.
+      operationId: detokenize
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Tokens"
+            example:
+              tokens: [22557, 1526, 28808]
+      responses:
+        "200":
+          description: Content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Content"
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /embedding:
+    post:
+      summary: Generate embedding of a given text.
+      operationId: embedding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+                  description: Set the text to process.
+                image_data:
+                  $ref: "#/components/schemas/ImageData"
+              required:
+                - content
+                - image_data
+            example:
+              content: "Image: [img-21].\nCaption:"
+              image_data:
+                - id: 21
+                  data: >-
+                    iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAAEElEQVR4nGL6+2k6IAAA//8FfgKJpsNGzgAAAABJRU5ErkJggg==
+
+      responses:
+        "200":
+          description: Embedding
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  embedding:
+                    type: array
+                    items:
+                      type: number
+                required:
+                  - embedding
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /infill:
+    post:
+      summary: For code infilling. Takes a prefix and a suffix and returns the predicted completion as
+        stream.
+      operationId: infill
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - type: object
+                  properties:
+                    input_prefix:
+                      type: string
+                      description: Set the prefix of the code to infill.
+                    input_suffix:
+                      type: string
+                      description: Set the suffix of the code to infill.
+                - $ref: "#/components/schemas/GenerationSettings"
+            example:
+              input_prefix: "int fact(int n) {"
+              input_suffix: "}"
+      responses:
+        "200":
+          description: Completion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompletionResult"
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /props:
+    get:
+      summary: Return current server settings.
+      operationId: props
+      responses:
+        "200":
+          description: Props
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assistant_name:
+                    type: string
+                    description: >-
+                      The required assistant name to generate the prompt in case you have specified a
+                      system prompt for all slots.
+                  user_name:
+                    type: string
+                    description: >-
+                      The required anti-prompt to generate the prompt in case you have specified a system
+                      prompt for all slots.
+                  default_generation_settings:
+                    description: >-
+                      The default generation settings for the `/completion` endpoint, which has the same
+                      fields as the generation_settings response object from the `/completion` endpoint.
+                    $ref: "#/components/schemas/GenerationSettings"
+                  total_slots:
+                    type: integer
+                    description: >-
+                      The total number of slots for process requests.
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /slots:
+    get:
+      summary: Returns the current slots processing state.
+      operationId: slots
+      responses:
+        "200":
+          description: Slots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Slot"
+        default:
+          description: Error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+        slots_idle:
+          type: integer
+        slots_processing:
+          type: integer
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/Slot"
+      required:
+        - status
+    GenerationSettings:
+      type: object
+      properties:
+        temperature:
+          type: number
+          description: Adjust the randomness of the generated text.
+          default: 0.8
+        dynatemp_range:
+          type: number
+          description: >-
+            Dynamic temperature range. The final temperature will be in the range of `[temperature - dynatemp_range;
+            temperature + dynatemp_range]`.
+          default: 0.0
+        dynatemp_exponent:
+          type: number
+          description: Dynamic temperature exponent.
+          default: 1.0
+        top_k:
+          type: integer
+          format: int32
+          description: Limit the next token selection to the K most probable tokens.
+          default: 40
+        top_p:
+          type: number
+          description: >-
+            Limit the next token selection to a subset of tokens with a cumulative probability above a
+            threshold P.
+          default: 0.95
+        min_p:
+          type: number
+          description: >-
+            The minimum probability for a token to be considered, relative to the probability of the most
+            likely token.
+          default: 0.05
+        n_predict:
+          type: integer
+          description: >-
+            Set the maximum number of tokens to predict when generating text. Note: May exceed the set
+            limit slightly if the last token is a partial multibyte character. When 0, no tokens will
+            be generated but the prompt is evaluated into the cache. Default: -1, where -1 is infinity.
+          default: -1
+        n_keep:
+          type: integer
+          description: >-
+            Specify the number of tokens from the prompt to retain when the context size is exceeded and
+            tokens need to be discarded. By default, this value is set to `0`, meaning no tokens are kept.
+            Use `-1` to retain all tokens from the prompt.
+          default: 0
+        stop:
+          type: array
+          items:
+            type: string
+          description: >-
+            Specify an array of stopping strings. These words will not be included in the completion,
+            so make sure to add them to the prompt for the next iteration.
+        tfs_z:
+          type: number
+          description: >-
+            Enable tail free sampling with parameter z. Default: `1.0`, which is disabled.
+          default: 1.0
+        typical_p:
+          type: number
+          description: >-
+            Enable locally typical sampling with parameter p. Default: `1.0`, which is disabled.
+          default: 1.0
+        repeat_penalty:
+          type: number
+          description: Control the repetition of token sequences in the generated text.
+          default: 1.1
+        repeat_last_n:
+          type: integer
+          description: >-
+            Last n tokens to consider for penalizing repetition. Default: `64`, where `0` is disabled
+            and `-1` is ctx-size.
+          default: 64
+        penalize_nl:
+          type: boolean
+          description: Penalize newline tokens when applying the repeat penalty.
+          default: true
+        presence_penalty:
+          type: number
+          description: >-
+            Repeat alpha presence penalty. Default: `0.0`, which is disabled.
+          default: 0.0
+        frequency_penalty:
+          type: number
+          description: >-
+            Repeat alpha frequency penalty. Default: `0.0`, which is disabled.
+          default: 0.0
+        penalty_prompt:
+          type: string
+          description: This will replace the prompt for the purpose of the penalty evaluation.
+        mirostat:
+          type: integer
+          description: >-
+            Enable Mirostat sampling, controlling perplexity during text generation. Default: `0`, where
+            `0` is disabled, `1` is Mirostat, and `2` is Mirostat 2.0.
+          default: 0
+        mirostat_tau:
+          type: number
+          description: Set the Mirostat target entropy, parameter tau.
+          default: 5.0
+        mirostat_eta:
+          type: number
+          description: Set the Mirostat learning rate, parameter eta.
+          default: 0.1
+        grammar:
+          type: string
+          description: Set grammar for grammar-based sampling.
+        json_schema:
+          type: string
+          description: >-
+            Set a JSON schema for grammar-based sampling (e.g. `{"items": {"type": "string"}, "minItems":
+            10, "maxItems": 100}` of a list of strings, or `{}` for any JSON).
+        seed:
+          type: integer
+          format: int64
+          description: >-
+            Set the random number generator (RNG) seed. Default: `-1`, which is a random seed.
+          default: -1
+        ignore_eos:
+          type: boolean
+          description: Ignore end of stream token and continue generating.
+          default: false
+        logit_bias:
+          type: array
+          items:
+            type: object
+          description: >-
+            Modify the likelihood of a token appearing in the generated text completion. For example,
+            use `"logit_bias": [[15043,1.0]]` to increase the likelihood of the token 'Hello', or `"logit_bias":
+            [[15043,-1.0]]` to decrease its likelihood. Setting the value to false, `"logit_bias": [[15043,false]]`
+            ensures that the token Hello is never produced. The tokens can also be represented as strings,
+            e.g. `[["Hello, World!",-0.5]]` will reduce the likelihood of all the individual tokens that
+            represent the string Hello, World!, just like the presence_penalty does.
+        n_probs:
+          type: integer
+          description: >-
+            If greater than 0, the response also contains the probabilities of top N tokens for each generated
+            token given the sampling settings. Note that for temperature < 0 the tokens are sampled greedily
+            but token probabilities are still being calculated via a simple softmax of the logits without
+            considering any other sampler settings.
+          default: 0
+        min_keep:
+          type: integer
+          description: If greater than 0, force samplers to return N possible tokens at minimum.
+          default: 0
+        image_data:
+          $ref: "#/components/schemas/ImageData"
+        id_slot:
+          type: integer
+          description: >-
+            Assign the completion task to an specific slot. If is -1 the task will be assigned to a Idle
+            slot.
+          default: -1
+        cache_prompt:
+          type: boolean
+          description: >-
+            Re-use KV cache from a previous request if possible. This way the common prefix does not have
+            to be re-processed, only the suffix that differs between the requests. Because (depending
+            on the backend) the logits are not guaranteed to be bit-for-bit identical for different batch
+            sizes (prompt processing vs. token generation) enabling this option can cause nondeterministic
+            results.
+          default: false
+        system_prompt:
+          type: string
+          description: >-
+            Change the system prompt (initial prompt of all slots), this is useful for chat applications.
+        samplers:
+          type: array
+          items:
+            type: string
+          description: >-
+            The order the samplers should be applied in. An array of strings representing sampler type
+            names. If a sampler is not set, it will not be used. If a sampler is specified more than once,
+            it will be applied multiple times. Default: `["top_k", "tfs_z", "typical_p", "top_p", "min_p",
+            "temperature"]` - these are all the available values.
+          default:
+            - top_k
+            - tfs_z
+            - typical_p
+            - top_p
+            - min_p
+            - temperature
+    CompletionResult:
+      type: object
+      properties:
+        completion_probabilities:
+          type: array
+          items:
+            type: object
+            properties:
+              content:
+                type: string
+              probs:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    prob:
+                      type: number
+                    tok_str:
+                      type: string
+          description: >-
+            An array of token probabilities for each completion. The array's length is `n_predict`.
+        content:
+          type: string
+          description: >-
+            Completion result as a string (excluding stopping_word if any). In case of streaming mode,
+            will contain the next token as a string.
+        stop:
+          type: boolean
+          description: >-
+            Boolean for use with `stream` to check whether the generation has stopped (Note: This is not
+            related to stopping words array `stop` from input options)
+        generation_settings:
+          type: object
+          allOf:
+            - type: object
+              properties:
+                n_ctx:
+                  type: integer
+                model:
+                  type: string
+            - $ref: "#/components/schemas/GenerationSettings"
+        model:
+          type: string
+          description: The path to the model.
+        prompt:
+          type: string
+          description: The provided prompt.
+        stopped_eos:
+          type: boolean
+          description: Indicating whether the completion has stopped because it encountered the EOS token.
+        stopped_limit:
+          type: boolean
+          description: >-
+            Indicating whether the completion stopped because `n_predict` tokens were generated before
+            stop words or EOS was encountered.
+        stopped_word:
+          type: boolean
+          description: >-
+            Indicating whether the completion stopped due to encountering a stopping word from `stop`
+            JSON array provided.
+        stopping_word:
+          type: string
+          description: >-
+            The stopping word encountered which stopped the generation (or "" if not stopped due to a
+            stopping word).
+        timings:
+          type: object
+          properties:
+            prompt_n:
+              type: integer
+            prompt_ms:
+              type: number
+            prompt_per_token_ms:
+              type: number
+            prompt_per_second:
+              type: number
+            predicted_n:
+              type: integer
+            predicted_ms:
+              type: number
+            predicted_per_token_ms:
+              type: number
+            predicted_per_second:
+              type: number
+          description: >-
+            Hash of timing information about the completion such as the number of tokens `predicted_per_second`.
+        tokens_cached:
+          type: integer
+          description: >-
+            Number of tokens from the prompt which could be re-used from previous completion (`n_past`).
+        tokens_evaluated:
+          type: integer
+          description: Number of tokens evaluated in total from the prompt.
+        truncated:
+          type: boolean
+          description: >-
+            Boolean indicating if the context size was exceeded during generation, i.e. the number of
+            tokens provided in the prompt (`tokens_evaluated`) plus tokens generated (`tokens predicted`)
+            exceeded the context size (`n_ctx`).
+        id_slot:
+          type: integer
+      required:
+        - content
+    Tokens:
+      type: object
+      properties:
+        tokens:
+          type: array
+          items:
+            type: integer
+            format: int32
+      required:
+        - tokens
+    Content:
+      type: object
+      properties:
+        content:
+          type: string
+      required:
+        - content
+    Embedding:
+      type: object
+      properties:
+        model:
+          type: string
+        object:
+          const: list
+        usage:
+          type: object
+          properties:
+            prompt_tokens:
+              type: integer
+            total_tokens:
+              type: integer
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              embedding:
+                type: array
+                items:
+                  type: number
+              index:
+                type: integer
+              object:
+                const: embedding
+
+    ImageData:
+      type: array
+      items:
+        type: object
+        properties:
+          data:
+            type: string
+          id:
+            type: integer
+      description": >-
+        An array of objects to hold base64-encoded image `data` and its `id`s to be reference in `prompt`.
+        You can determine the place of the image in the prompt as in the following: `USER:[img-12]Describe
+        the image in detail.\nASSISTANT:`. In this case, `[img-12]` will be replaced by the embeddings
+        of the image with id `12` in the following image_data array: `{..., "image_data": [{"data": "<BASE64_STRING>",
+        "id": 12}]}`. Use image_data only with multimodal models, e.g., LLaVA.
+    Slot:
+      type: object
+      allOf:
+        - type: object
+          properties:
+            id:
+              type: integer
+            model:
+              type: string
+            n_ctx:
+              type: integer
+            next_token:
+              type: object
+              properties:
+                has_next_token:
+                  type: boolean
+                n_remain:
+                  type: integer
+                n_decoded:
+                  type: integer
+                stopped_eos:
+                  type: boolean
+                stopped_limit:
+                  type: boolean
+                stopped_word:
+                  type: boolean
+                stopping_word:
+                  type: string
+            state:
+              type: integer
+            task_id:
+              type: integer
+            use_penalty_prompt_tokens:
+              type: boolean
+        - $ref: "#/components/schemas/GenerationSettings"
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: integer
+            message:
+              type: string
+            type:
+              type: string
