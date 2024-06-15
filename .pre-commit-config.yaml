@@ -3,10 +3,18 @@ repos:
     rev: v4.6.0
     hooks:
       - id: check-merge-conflict
-      - id: check-yaml
+      - id: check-json
       - id: end-of-file-fixer
       - id: trailing-whitespace
   - repo: https://github.com/google/yamlfmt
     rev: v0.12.1
     hooks:
       - id: yamlfmt
+  - repo: local
+    hooks:
+      - id: dprint
+        name: run dprint
+        entry: dprint fmt
+        language: system
+        files: \.(toml|md)$
+        types: [text]
